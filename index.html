@@ -21,10 +21,16 @@
     .progress-fill { height: 100%; background: linear-gradient(90deg, #06b6d4, #0891b2); width: 0%; transition: width 0.3s; }
     .progress-text { margin-top: 8px; font-size: 14px; color: #64748b; text-align: center; }
     .result { margin-top: 24px; }
+    .actions { margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn { padding: 12px 20px; border-radius: 12px; text-decoration: none; font-size: 14px; cursor: pointer; border: none; }
+    .btn-primary { background: #06b6d4; color: white; }
+    .btn-secondary { background: #e2e8f0; color: #475569; }
+    .btn:hover { opacity: 0.9; }
     .page { margin-bottom: 24px; background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .page-number { font-size: 14px; color: #64748b; margin-bottom: 12px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .page-number { font-size: 14px; color: #64748b; }
     .page canvas { max-width: 100%; border-radius: 8px; }
-    .download-btn { display: inline-block; margin-top: 12px; padding: 8px 16px; background: #06b6d4; color: white; border-radius: 8px; text-decoration: none; font-size: 14px; }
+    .download-btn { display: inline-block; margin-top: 12px; padding: 8px 16px; background: #06b6d4; color: white; border-radius: 8px; text-decoration: none; font-size: 14px; border: none; cursor: pointer; }
     .download-btn:hover { background: #0891b2; }
     .tips { margin-top: 16px; padding: 12px; background: #f0f9ff; border-radius: 12px; font-size: 14px; color: #0369a1; }
   </style>
@@ -63,12 +69,15 @@
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
     const result = document.getElementById('result');
+    let totalPages = 0;
+    let imageDataList = [];
 
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
       result.innerHTML = '';
+      imageDataList = [];
       progress.style.display = 'block';
       progressFill.style.width = '0%';
       progressText.textContent = '正在读取 PDF...';
@@ -76,7 +85,7 @@
       try {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const totalPages = pdf.numPages;
+        totalPages = pdf.numPages;
 
         progressText.textContent = `共 ${totalPages} 页，正在转换...`;
 
@@ -92,30 +101,51 @@
 
           await page.render({ canvasContext: ctx, viewport }).promise;
 
+          const imageData = canvas.toDataURL('image/jpeg', 0.9);
+          imageDataList.push(imageData);
+
           const pageDiv = document.createElement('div');
           pageDiv.className = 'page';
+          
+          const pageHeader = document.createElement('div');
+          pageHeader.className = 'page-header';
           
           const pageNum = document.createElement('div');
           pageNum.className = 'page-number';
           pageNum.textContent = `第 ${i} / ${totalPages} 页`;
           
           const img = document.createElement('img');
-          img.src = canvas.toDataURL('image/jpeg', 0.9);
+          img.src = imageData;
           img.style.width = '100%';
           
-          const downloadBtn = document.createElement('a');
+          const downloadBtn = document.createElement('button');
           downloadBtn.className = 'download-btn';
-          downloadBtn.href = img.src;
-          downloadBtn.download = `page_${i}.jpg`;
-          downloadBtn.textContent = '💾 下载此页';
+          downloadBtn.textContent = '💾 保存图片';
+          downloadBtn.onclick = () => downloadImage(imageData, `page_${i}.jpg`);
 
-          pageDiv.appendChild(pageNum);
+          pageHeader.appendChild(pageNum);
+          pageHeader.appendChild(downloadBtn);
+          
+          pageDiv.appendChild(pageHeader);
           pageDiv.appendChild(img);
-          pageDiv.appendChild(downloadBtn);
           result.appendChild(pageDiv);
 
           progressFill.style.width = `${(i / totalPages) * 100}%`;
           progressText.textContent = `正在转换第 ${i} 页...`;
+        }
+
+        // Add download all button
+        if (totalPages > 1) {
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'actions';
+          
+          const downloadAllBtn = document.createElement('button');
+          downloadAllBtn.className = 'btn btn-primary';
+          downloadAllBtn.textContent = '📥 下载全部图片';
+          downloadAllBtn.onclick = downloadAll;
+          
+          actionsDiv.appendChild(downloadAllBtn);
+          result.insertBefore(actionsDiv, result.firstChild);
         }
 
         progressText.textContent = '转换完成！';
@@ -124,6 +154,21 @@
         console.error(err);
       }
     });
+
+    function downloadImage(dataUrl, filename) {
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      link.click();
+    }
+
+    function downloadAll() {
+      imageDataList.forEach((dataUrl, index) => {
+        setTimeout(() => {
+          downloadImage(dataUrl, `page_${index + 1}.jpg`);
+        }, index * 500);
+      });
+    }
 
     // Drag and drop
     const uploadArea = document.querySelector('.upload-area');
