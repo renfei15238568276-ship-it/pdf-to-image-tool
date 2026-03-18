@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 转图片</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; min-height: 100vh; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .card { background: white; border-radius: 24px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    h1 { font-size: 24px; color: #0f172a; margin-bottom: 20px; text-align: center; }
+    .upload-area { border: 2px dashed #cbd5e1; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+    .upload-area:hover { border-color: #06b6d4; }
+    .upload-area input { display: none; }
+    .upload-icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-text { color: #64748b; }
+    .progress { margin-top: 20px; display: none; }
+    .progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #06b6d4, #0891b2); width: 0%; transition: width 0.3s; }
+    .progress-text { margin-top: 8px; font-size: 14px; color: #64748b; text-align: center; }
+    .result { margin-top: 24px; }
+    .page { margin-bottom: 24px; background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .page-number { font-size: 14px; color: #64748b; margin-bottom: 12px; }
+    .page canvas { max-width: 100%; border-radius: 8px; }
+    .download-btn { display: inline-block; margin-top: 12px; padding: 8px 16px; background: #06b6d4; color: white; border-radius: 8px; text-decoration: none; font-size: 14px; }
+    .download-btn:hover { background: #0891b2; }
+    .tips { margin-top: 16px; padding: 12px; background: #f0f9ff; border-radius: 12px; font-size: 14px; color: #0369a1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>📄 PDF 转图片</h1>
+      
+      <label class="upload-area">
+        <input type="file" id="fileInput" accept=".pdf">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">点击选择 PDF 文件<br>或拖拽文件到这里</div>
+      </label>
+
+      <div class="progress" id="progress">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="progress-text" id="progressText">正在加载...</p>
+      </div>
+
+      <div class="result" id="result"></div>
+
+      <div class="tips">
+        💡 提示：转换在浏览器本地完成，不会上传文件，保护隐私
+      </div>
+    </div>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const fileInput = document.getElementById('fileInput');
+    const progress = document.getElementById('progress');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const result = document.getElementById('result');
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      result.innerHTML = '';
+      progress.style.display = 'block';
+      progressFill.style.width = '0%';
+      progressText.textContent = '正在读取 PDF...';
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+
+        progressText.textContent = `共 ${totalPages} 页，正在转换...`;
+
+        for (let i = 1; i <= totalPages; i++) {
+          const page = await pdf.getPage(i);
+          const scale = 2;
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const pageDiv = document.createElement('div');
+          pageDiv.className = 'page';
+          
+          const pageNum = document.createElement('div');
+          pageNum.className = 'page-number';
+          pageNum.textContent = `第 ${i} / ${totalPages} 页`;
+          
+          const img = document.createElement('img');
+          img.src = canvas.toDataURL('image/jpeg', 0.9);
+          img.style.width = '100%';
+          
+          const downloadBtn = document.createElement('a');
+          downloadBtn.className = 'download-btn';
+          downloadBtn.href = img.src;
+          downloadBtn.download = `page_${i}.jpg`;
+          downloadBtn.textContent = '💾 下载此页';
+
+          pageDiv.appendChild(pageNum);
+          pageDiv.appendChild(img);
+          pageDiv.appendChild(downloadBtn);
+          result.appendChild(pageDiv);
+
+          progressFill.style.width = `${(i / totalPages) * 100}%`;
+          progressText.textContent = `正在转换第 ${i} 页...`;
+        }
+
+        progressText.textContent = '转换完成！';
+      } catch (err) {
+        progressText.textContent = '转换失败: ' + err.message;
+        console.error(err);
+      }
+    });
+
+    // Drag and drop
+    const uploadArea = document.querySelector('.upload-area');
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.style.borderColor = '#06b6d4';
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.style.borderColor = '#cbd5e1';
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.style.borderColor = '#cbd5e1';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === 'application/pdf') {
+        fileInput.files = e.dataTransfer.files;
+        fileInput.dispatchEvent(new Event('change'));
+      }
+    });
+  </script>
+</body>
+</html>
